@@ -41,6 +41,20 @@ struct pkt
 /* called from layer 5, passed the data to be sent to other side */
 A_output(message) struct msg message;
 {
+    /* where message is a structure of type msg, containing data to be sent to the
+    B-side. This routine will be called whenever the upper layer at the sending side (A) has a message
+    to send. It is the job of your protocol to ensure that the data in such a message is delivered in-order,
+    and correctly, to the receiving side upper layer. */
+    printf("\nA_OUTPUT");
+
+    // struct pkt* my_pkt = (struct pkt*)malloc(sizeof(struct pkt));
+    struct pkt my_pkt;
+
+    strncpy(my_pkt.payload, message.data, 19);
+    my_pkt.payload[19] = '\0';
+    printf(my_pkt.payload);
+
+    tolayer3(0, my_pkt);
 }
 
 B_output(message) /* need be completed only for extra credit */
@@ -51,18 +65,25 @@ B_output(message) /* need be completed only for extra credit */
 /* called from layer 3, when a packet arrives for layer 4 */
 A_input(packet) struct pkt packet;
 {
+    /* where packet is a structure of type pkt. This routine will be called whenever
+    a packet sent from the B-side (i.e., as a result of a tolayer3() being done by a B-side procedure)
+    arrives at the A-side. packet is the (possibly corrupted) packet sent from the B-side. */
+    printf("\nA_INPUT");
 }
 
 /* called when A's timer goes off */
 A_timerinterrupt()
 {
+    /* This routine will be called when A's timer expires (thus generating a timer
+    interrupt). You'll probably want to use this routine to control the retransmission of packets.
+    See starttimer() and stoptimer() below for how the timer is started and stopped. */
 }
 
 /* the following routine will be called once (only) before any other */
 /* entity A routines are called. You can use it to do any initialization */
 A_init()
 {
-    printf("TEST");
+    starttimer(0, 10);
 }
 
 /* Note that with simplex transfer from a-to-B, there is no B_output() */
@@ -70,6 +91,11 @@ A_init()
 /* called from layer 3, when a packet arrives for layer 4 at B*/
 B_input(packet) struct pkt packet;
 {
+    /* where packet is a structure of type pkt. This routine will be called whenever
+    a packet sent from the A-side (i.e., as a result of a tolayer3() being done by a A-side procedure)
+    arrives at the B-side. packet is the (possibly corrupted) packet sent from the A-side */
+    printf("\nB_OUTPUT");
+    printf(packet.payload);
 }
 
 /* called when B's timer goes off */
@@ -81,7 +107,31 @@ B_timerinterrupt()
 /* entity B routines are called. You can use it to do any initialization */
 B_init()
 {
+
 }
+
+/****************************************************************
+ * API provided for us to call found on LINE 376
+ * starttimer(calling_entity,increment) 
+    where calling_entity is either 0 (for starting the A-side
+    timer) or 1 (for starting the B side timer), and increment is a float value indicating the amount of
+    time that will pass before the timer interrupts. A's timer should only be started (or stopped) by A-
+    side routines, and similarly for the B-side timer. To give you an idea of the appropriate increment
+    value to use: a packet sent into the network takes an average of 5 time units to arrive at the other
+    side when there are no other messages in the medium.
+ * stoptimer(calling_entity) 
+    where calling_entity is either 0 (for stopping the A-side timer) or
+    1 (for stopping the B side timer).
+ * tolayer3(calling_entity,packet) 
+    where calling_entity is either 0 (for the A-side send) or 1
+    (for the B side send), and packet is a structure of type pkt. Calling this routine will cause the
+    packet to be sent into the network, destined for the other entity.
+ * tolayer5(calling_entity,message) 
+    where calling_entity is either 0 (for A-side delivery to
+    layer 5) or 1 (for B-side delivery to layer 5), and message is a structure of type msg. With
+    unidirectional data transfer, you would only be calling this with calling_entity equal to 1
+    (delivery to the B-side). Calling this routine will cause data to be passed up to layer 5
+ * /
 
 /*****************************************************************
 ***************** NETWORK EMULATION CODE STARTS BELOW ***********
