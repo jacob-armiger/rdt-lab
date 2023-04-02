@@ -3,8 +3,12 @@
 
 ## Running the code
 So far I have only been able to run the code on the hydra machines. You can run 
-it on your personal machine if you have an older version of a C compiler.  
+it on your personal machine if you have an older version of a C compiler.
+
+When prompted for `Enter average time between messages from sender's layer5 [ > 0.0]`  
+Setting it to small values, like 0.1, causes `B_Input` to not be called? Setting it to
+10+ seems to work.
 
 ### Commands
-`gcc -w main.c -o main`
+`gcc -w -o main main.c`
 `./main`
