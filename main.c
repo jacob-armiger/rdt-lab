@@ -38,6 +38,54 @@ struct pkt
 
 /********* STUDENTS WRITE THE NEXT SEVEN ROUTINES *********/
 
+//sender
+struct Sender {
+    int base;
+    int nextseq;
+    int window_size;
+    int buffer_next;
+    struct pkt buffer[50] //Buffer for 50 packets/messages
+} A;
+
+//receiver
+struct Receiver {
+    int expect_seq;
+    struct pkt ack_packet;
+} B;
+
+/* the following routine will be called once (only) before any other */
+/* entity A routines are called. You can use it to do any initialization */
+void A_init()
+{   
+    printf("\nA_INiT");
+    A.base = 1;
+    A.nextseq = 1;
+    A.window_size = 8; //default size 8
+    A.buffer_next = 1;
+}
+
+/* the following rouytine will be called once (only) before any other */
+/* entity B routines are called. You can use it to do any initialization */
+B_init()
+{
+    printf("\nB_INiT");
+    B.expect_seq =1;
+    B.ack_packet.acknum = 0;
+    B.ack_packet.seqnum = -1; //
+    memset(B.ack_packet.payload,0,20); //init packet payload to all zeros
+
+    //create the checksum with data, sequence, and ack fields
+    checksum = B.ack_packet.seqnum + B.ack_packet.acknum
+    int i = 0;
+    for(i; i<20; i++) {
+        checksum = checksum + B.ack_packet.payload[i]
+    }
+
+    B.ack_packet.checksum = checksum
+}
+
+
+
 /* called from layer 5, passed the data to be sent to other side */
 A_output(message) struct msg message;
 {
@@ -83,13 +131,7 @@ A_timerinterrupt()
     printf("\nA_TIMER_INTERRUPT\n");
 }
 
-/* the following routine will be called once (only) before any other */
-/* entity A routines are called. You can use it to do any initialization */
-A_init()
-{   
-    printf("\nA_INiT");
-    starttimer(0, 10);
-}
+
 
 /* Note that with simplex transfer from a-to-B, there is no B_output() */
 
@@ -108,13 +150,6 @@ B_input(packet) struct pkt packet;
 B_timerinterrupt()
 {
     printf("\nB_TIMER_INTERRUPT\n");
-}
-
-/* the following rouytine will be called once (only) before any other */
-/* entity B routines are called. You can use it to do any initialization */
-B_init()
-{
-    printf("\nB_INiT");
 }
 
 /****************************************************************
