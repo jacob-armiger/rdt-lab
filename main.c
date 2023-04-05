@@ -56,7 +56,7 @@ struct Receiver {
 /* the following routine will be called once (only) before any other */
 /* entity A routines are called. You can use it to do any initialization */
 void A_init()
-{   
+{
     printf("\nA_INiT");
     A.base = 1;
     A.nextseq = 1;
@@ -108,10 +108,22 @@ A_output(message) struct msg message;
     tolayer3(0, my_pkt);
 }
 
-B_output(message) /* need be completed only for extra credit */
-    struct msg message;
+/* called from layer 3, when a packet arrives for layer 4 at B*/
+B_input(packet) struct pkt packet;
 {
+    /* where packet is a structure of type pkt. This routine will be called whenever
+    a packet sent from the A-side (i.e., as a result of a tolayer3() being done by a A-side procedure)
+    arrives at the B-side. packet is the (possibly corrupted) packet sent from the A-side */
+    printf("B_INPUT\n");
+
+    // If checksum is OK then send to layer 5 and ack?
+    tolayer5(1, packet.payload);
+
+    // Send ACK?
+    tolayer3(1, packet);
+
 }
+
 
 /* called from layer 3, when a packet arrives for layer 4 */
 A_input(packet) struct pkt packet;
@@ -120,7 +132,12 @@ A_input(packet) struct pkt packet;
     a packet sent from the B-side (i.e., as a result of a tolayer3() being done by a B-side procedure)
     arrives at the A-side. packet is the (possibly corrupted) packet sent from the B-side. */
     printf("\nA_INPUT\n");
+
+    // Recieve ACK and check sequence number
+
 }
+
+
 
 /* called when A's timer goes off */
 A_timerinterrupt()
@@ -130,27 +147,16 @@ A_timerinterrupt()
     See starttimer() and stoptimer() below for how the timer is started and stopped. */
     printf("\nA_TIMER_INTERRUPT\n");
 }
-
-
-
-/* Note that with simplex transfer from a-to-B, there is no B_output() */
-
-/* called from layer 3, when a packet arrives for layer 4 at B*/
-B_input(packet) struct pkt packet;
-{
-    /* where packet is a structure of type pkt. This routine will be called whenever
-    a packet sent from the A-side (i.e., as a result of a tolayer3() being done by a A-side procedure)
-    arrives at the B-side. packet is the (possibly corrupted) packet sent from the A-side */
-    printf("B_INPUT\n");
-
-    tolayer5(1, packet.payload);
-}
-
 /* called when B's timer goes off */
 B_timerinterrupt()
 {
     printf("\nB_TIMER_INTERRUPT\n");
 }
+
+
+/* Note that with simplex transfer from a-to-B, there is no B_output() */
+/* need be completed only for extra credit */
+B_output(message) struct msg message;{}
 
 /****************************************************************
  * API provided for us to call found on LINE 376
