@@ -75,13 +75,13 @@ B_init()
     memset(B.ack_packet.payload,0,20); //init packet payload to all zeros
 
     //create the checksum with data, sequence, and ack fields
-    checksum = B.ack_packet.seqnum + B.ack_packet.acknum
+    int checksum = B.ack_packet.seqnum + B.ack_packet.acknum;
     int i = 0;
-    for(i; i<20; i++) {
-        checksum = checksum + B.ack_packet.payload[i]
+    for(int i; i<20; i++) {
+        checksum = checksum + B.ack_packet.payload[i];
     }
 
-    B.ack_packet.checksum = checksum
+    B.ack_packet.checksum = checksum;
 }
 
 
