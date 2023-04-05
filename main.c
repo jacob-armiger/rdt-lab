@@ -38,6 +38,54 @@ struct pkt
 
 /********* STUDENTS WRITE THE NEXT SEVEN ROUTINES *********/
 
+//sender
+struct Sender {
+    int base;
+    int nextseq;
+    int window_size;
+    int buffer_next;
+    struct pkt buffer[50] //Buffer for 50 packets/messages
+} A;
+
+//receiver
+struct Receiver {
+    int expect_seq;
+    struct pkt ack_packet;
+} B;
+
+/* the following routine will be called once (only) before any other */
+/* entity A routines are called. You can use it to do any initialization */
+void A_init()
+{
+    printf("\nA_INiT");
+    A.base = 1;
+    A.nextseq = 1;
+    A.window_size = 8; //default size 8
+    A.buffer_next = 1;
+}
+
+/* the following rouytine will be called once (only) before any other */
+/* entity B routines are called. You can use it to do any initialization */
+B_init()
+{
+    printf("\nB_INiT");
+    B.expect_seq =1;
+    B.ack_packet.acknum = 0;
+    B.ack_packet.seqnum = -1; //
+    memset(B.ack_packet.payload,0,20); //init packet payload to all zeros
+
+    //create the checksum with data, sequence, and ack fields
+    int checksum = B.ack_packet.seqnum + B.ack_packet.acknum;
+    int i = 0;
+    for(int i; i<20; i++) {
+        checksum = checksum + B.ack_packet.payload[i];
+    }
+
+    B.ack_packet.checksum = checksum;
+}
+
+
+
 /* called from layer 5, passed the data to be sent to other side */
 A_output(message) struct msg message;
 {
@@ -60,10 +108,22 @@ A_output(message) struct msg message;
     tolayer3(0, my_pkt);
 }
 
-B_output(message) /* need be completed only for extra credit */
-    struct msg message;
+/* called from layer 3, when a packet arrives for layer 4 at B*/
+B_input(packet) struct pkt packet;
 {
+    /* where packet is a structure of type pkt. This routine will be called whenever
+    a packet sent from the A-side (i.e., as a result of a tolayer3() being done by a A-side procedure)
+    arrives at the B-side. packet is the (possibly corrupted) packet sent from the A-side */
+    printf("B_INPUT\n");
+
+    // If checksum is OK then send to layer 5 and ack?
+    tolayer5(1, packet.payload);
+
+    // Send ACK?
+    tolayer3(1, packet);
+
 }
+
 
 /* called from layer 3, when a packet arrives for layer 4 */
 A_input(packet) struct pkt packet;
@@ -72,7 +132,12 @@ A_input(packet) struct pkt packet;
     a packet sent from the B-side (i.e., as a result of a tolayer3() being done by a B-side procedure)
     arrives at the A-side. packet is the (possibly corrupted) packet sent from the B-side. */
     printf("\nA_INPUT\n");
+
+    // Recieve ACK and check sequence number
+
 }
+
+
 
 /* called when A's timer goes off */
 A_timerinterrupt()
@@ -82,40 +147,16 @@ A_timerinterrupt()
     See starttimer() and stoptimer() below for how the timer is started and stopped. */
     printf("\nA_TIMER_INTERRUPT\n");
 }
-
-/* the following routine will be called once (only) before any other */
-/* entity A routines are called. You can use it to do any initialization */
-A_init()
-{   
-    printf("\nA_INiT");
-    starttimer(0, 10);
-}
-
-/* Note that with simplex transfer from a-to-B, there is no B_output() */
-
-/* called from layer 3, when a packet arrives for layer 4 at B*/
-B_input(packet) struct pkt packet;
-{
-    /* where packet is a structure of type pkt. This routine will be called whenever
-    a packet sent from the A-side (i.e., as a result of a tolayer3() being done by a A-side procedure)
-    arrives at the B-side. packet is the (possibly corrupted) packet sent from the A-side */
-    printf("B_INPUT\n");
-
-    tolayer5(1, packet.payload);
-}
-
 /* called when B's timer goes off */
 B_timerinterrupt()
 {
     printf("\nB_TIMER_INTERRUPT\n");
 }
 
-/* the following rouytine will be called once (only) before any other */
-/* entity B routines are called. You can use it to do any initialization */
-B_init()
-{
-    printf("\nB_INiT");
-}
+
+/* Note that with simplex transfer from a-to-B, there is no B_output() */
+/* need be completed only for extra credit */
+B_output(message) struct msg message;{}
 
 /****************************************************************
  * API provided for us to call found on LINE 376
