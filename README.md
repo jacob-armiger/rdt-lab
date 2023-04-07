@@ -11,5 +11,4 @@ Setting it to small values, like 0.1, causes `B_Input` to not be called? Setting
 10+ seems to work.
 
 ### Commands
-`gcc -w -o main main.c`
-`./main`
+`gcc -w -o main main.c && ./main`

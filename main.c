@@ -22,7 +22,7 @@ or lost, according to user-defined probabilities
 /* to layer 5 via the students transport level protocol entities. */
 struct msg
 {
-    char data[20];
+    char data[21];
 };
 
 /* a packet is the data unit passed from layer 4 (students code) to layer */
@@ -33,10 +33,9 @@ struct pkt
     int seqnum;
     int acknum;
     int checksum;
-    char payload[20];
+    char payload[21];
 };
 
-/********* STUDENTS WRITE THE NEXT SEVEN ROUTINES *********/
 
 //sender
 struct Sender {
@@ -85,6 +84,7 @@ B_init()
 }
 
 
+/********* STUDENTS WRITE THE NEXT SEVEN ROUTINES *********/
 
 /* called from layer 5, passed the data to be sent to other side */
 A_output(message) struct msg message;
@@ -93,16 +93,18 @@ A_output(message) struct msg message;
     B-side. This routine will be called whenever the upper layer at the sending side (A) has a message
     to send. It is the job of your protocol to ensure that the data in such a message is delivered in-order,
     and correctly, to the receiving side upper layer. */
-    printf("A_OUTPUT\n");
+    printf("\nA_OUTPUT");
+    // Add null character to end of message
+    message.data[20] = '\0';
 
-    // struct pkt* my_pkt = (struct pkt*)malloc(sizeof(struct pkt));
     struct pkt my_pkt;
 
     my_pkt.seqnum = 1;
     my_pkt.acknum = 2;
-    my_pkt.checksum = 20;
-    strncpy(my_pkt.payload, message.data, 19);
-    my_pkt.payload[19] = '\0';
+
+    // Create checksum and payloadf for packet
+    my_pkt.checksum = create_checksum(message.data);
+    strncpy(my_pkt.payload, message.data, 20);
 
 
     tolayer3(0, my_pkt);
@@ -114,13 +116,18 @@ B_input(packet) struct pkt packet;
     /* where packet is a structure of type pkt. This routine will be called whenever
     a packet sent from the A-side (i.e., as a result of a tolayer3() being done by a A-side procedure)
     arrives at the B-side. packet is the (possibly corrupted) packet sent from the A-side */
-    printf("B_INPUT\n");
-
-    // If checksum is OK then send to layer 5 and ack?
-    tolayer5(1, packet.payload);
-
-    // Send ACK?
-    tolayer3(1, packet);
+    printf("\nB_INPUT");
+    
+    int checksum = create_checksum(packet.payload);
+    // If checksum is OK then send to layer 5 and ACK
+    if(packet.checksum == checksum) {
+        // Send up to layer 5
+        tolayer5(1, packet.payload);
+        // Send ACK
+        tolayer3(1, packet);
+    } else {
+        printf("\nChecksum failed\n");
+    }
 
 }
 
@@ -131,9 +138,10 @@ A_input(packet) struct pkt packet;
     /* where packet is a structure of type pkt. This routine will be called whenever
     a packet sent from the B-side (i.e., as a result of a tolayer3() being done by a B-side procedure)
     arrives at the A-side. packet is the (possibly corrupted) packet sent from the B-side. */
-    printf("\nA_INPUT\n");
+    printf("\nA_INPUT");
 
     // Recieve ACK and check sequence number
+    // If timer expires while waiting for ACK then message needs to be sent again
 
 }
 
@@ -153,6 +161,23 @@ B_timerinterrupt()
     printf("\nB_TIMER_INTERRUPT\n");
 }
 
+
+create_checksum(char *string) {
+    printf("\n%s\n",string);
+
+
+    int sum = 0;
+    int checksum;
+    for(int i = 0; i < strlen(string); i++) {
+        sum += string[i];
+    }
+
+    int key = 17;
+
+    checksum = sum % key;
+    
+    return checksum;
+}
 
 /* Note that with simplex transfer from a-to-B, there is no B_output() */
 /* need be completed only for extra credit */
