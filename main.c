@@ -43,7 +43,8 @@ struct Sender {
     int nextseq;
     int window_size;
     int buffer_next;
-    struct pkt buffer[50] //Buffer for 50 packets/messages
+    struct pkt buffer[50]; //Buffer for 50 packets/messages
+    float est_rtt;
 } A;
 
 //receiver
@@ -61,6 +62,7 @@ void A_init()
     A.nextseq = 1;
     A.window_size = 8; //default size 8
     A.buffer_next = 1;
+    A.est_rtt = 10; // est_rtt is 5 when no other messages are in the "medium"
 }
 
 /* the following rouytine will be called once (only) before any other */
@@ -154,6 +156,21 @@ A_timerinterrupt()
     interrupt). You'll probably want to use this routine to control the retransmission of packets.
     See starttimer() and stoptimer() below for how the timer is started and stopped. */
     printf("\nA_TIMER_INTERRUPT\n");
+
+    
+    /* retransmission window is determined by base and nextseq
+    - loop until base == nextseq
+    */
+    int i = A.base;
+    for (i; i < A.nextseq; ++i) {
+        //find packet at index
+        struct pkt *packet = &A.buffer[i % 50];
+        //re-transmit packet to layer 3
+        tolayer3(0, *packet);
+    }
+    //timer needs to be restarted because of an interrupt code somewhere
+    //default 10 est_rtt, 0 for first arg (AorB) to signify starting timer 'A'
+    starttimer(0, A.est_rtt);
 }
 /* called when B's timer goes off */
 B_timerinterrupt()
