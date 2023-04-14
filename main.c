@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 /* ******************************************************************
 ALTERNATING BIT AND GO-BACK-N NETWORK EMULATOR: VERSION 1.1 J.F.Kurose
@@ -110,6 +111,8 @@ A_output(message) struct msg message;
 
 
     tolayer3(0, my_pkt);
+    // starttimer(0, 2000);
+    // printf("start timer!");
 }
 
 /* called from layer 3, when a packet arrives for layer 4 at B*/
@@ -141,9 +144,11 @@ A_input(packet) struct pkt packet;
     a packet sent from the B-side (i.e., as a result of a tolayer3() being done by a B-side procedure)
     arrives at the A-side. packet is the (possibly corrupted) packet sent from the B-side. */
     printf("\nA_INPUT");
+    // stoptimer(0);
 
     // Recieve ACK and check sequence number
     // If timer expires while waiting for ACK then message needs to be sent again
+
 
 }
 
@@ -161,16 +166,16 @@ A_timerinterrupt()
     /* retransmission window is determined by base and nextseq
     - loop until base == nextseq
     */
-    int i = A.base;
-    for (i; i < A.nextseq; ++i) {
-        //find packet at index
-        struct pkt *packet = &A.buffer[i % 50];
-        //re-transmit packet to layer 3
-        tolayer3(0, *packet);
-    }
+    // int i = A.base;
+    // for (i; i < A.nextseq; ++i) {
+    //     //find packet at index
+    //     struct pkt *packet = &A.buffer[i % 50];
+    //     //re-transmit packet to layer 3
+    //     tolayer3(0, *packet);
+    // }
     //timer needs to be restarted because of an interrupt code somewhere
     //default 10 est_rtt, 0 for first arg (AorB) to signify starting timer 'A'
-    starttimer(0, A.est_rtt);
+    // starttimer(0, A.est_rtt);
 }
 /* called when B's timer goes off */
 B_timerinterrupt()
@@ -404,9 +409,9 @@ init() /* initialize the simulator */
 /****************************************************************************/
 float jimsrand()
 {
-    double mmm = 2147483647; /* largest int - MACHINE DEPENDENT!!!!!!!! */
     float x;                 /* individual students may need to change mmm */
-    x = rand() / mmm;        /* x should be uniform in [0,1] */
+    x = ((double) rand() / (RAND_MAX));   /* x should be uniform in [0,1] */
+    // printf("%f\n", x);
     return (x);
 }
 
@@ -418,7 +423,7 @@ generate_next_arrival()
 {
     double x, log(), ceil();
     struct event *evptr;
-    char *malloc();
+    // char *malloc();
     float ttime;
     int tempint;
 
@@ -532,7 +537,7 @@ float increment;
 
     struct event *q;
     struct event *evptr;
-    char *malloc();
+    // char *malloc();
 
     if (TRACE > 2)
         printf(" START TIMER: starting timer at %f\n", time);
@@ -559,7 +564,7 @@ struct pkt packet;
 {
     struct pkt *mypktptr;
     struct event *evptr, *q;
-    char *malloc();
+    // char *malloc();
     float lastime, x, jimsrand();
     int i;
 
