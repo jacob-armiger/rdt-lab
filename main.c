@@ -42,7 +42,7 @@ struct Sender {
     int base;
     int nextseq;
     int window_size;
-    int buffer_next;
+    int buffer_index;
     struct pkt buffer[50]; //Buffer for 50 packets/messages
     float est_rtt;
 } A;
@@ -50,6 +50,7 @@ struct Sender {
 struct Receiver {
     int expectseq;
     struct pkt ack_packet;
+    struct pkt last_in_order_pkt;
 } B;
 
 /* the following routine will be called once (only) before any other */
@@ -59,7 +60,7 @@ A_init()
     A.base = 0;
     A.nextseq = 0;
     A.window_size = 8; //default size 8
-    A.buffer_next = 1;
+    A.buffer_index = 0;
     A.est_rtt = 10; // est_rtt is 5 when no other messages are in the "medium"
 }
 B_init()
@@ -67,11 +68,16 @@ B_init()
     B.expectseq = 0;
     B.ack_packet.acknum = 0;
     B.ack_packet.seqnum = -1; //
+    B.last_in_order_pkt.seqnum = -1;
     memset(B.ack_packet.payload,0,20); //init packet payload to all zeros
 }
 
 
 /********* STUDENTS WRITE THE NEXT SEVEN ROUTINES *********/
+/*
+TODO:
+* Not sure if timer start/stop is correct
+*/
 
 /* called from layer 5, passed the data to be sent to other side */
 A_output(message) struct msg message;
@@ -91,15 +97,22 @@ A_output(message) struct msg message;
     my_pkt.checksum = create_checksum(message.data);
     strncpy(my_pkt.payload, message.data, 20);
 
-    // if(A.base == 0)
-    // {starttimer(0, 11.0);}
-    starttimer(0, 11.0);
+    // Add packet to buffer
+    A.buffer[A.buffer_index] = my_pkt;
+    while(A.nextseq <= A.base) {
+        // Start timer
+        // if(A.nextseq == 0)
+        starttimer(0, 10.0);
 
-    // Send packet to reciever
-    tolayer3(0, my_pkt);
+        // Send packet to reciever
+        tolayer3(0, A.buffer[A.buffer_index]);
 
-    // Incremement next sequence number
-    A.nextseq = A.nextseq + 1;
+        // Increment sequence number and decrement buffer index
+        A.nextseq = A.nextseq + 1;
+        A.buffer_index = A.buffer_index - 1;
+    }
+    // Increment buffer index for next loop
+    A.buffer_index += 1;
 }
 
 /* called from layer 3, when a packet arrives for layer 4 at B*/
@@ -111,7 +124,7 @@ B_input(packet) struct pkt packet;
     printf("\nB_INPUT");
     
     int checksum = create_checksum(packet.payload);
-    // If checksum is OK then send to layer 5 and ACK
+    // If checksum is OK then send to layer 5 and send ACK
     if(packet.checksum == checksum && packet.seqnum == B.expectseq) {
         // Deliver to layer 5
         tolayer5(1, packet.payload);
@@ -119,8 +132,12 @@ B_input(packet) struct pkt packet;
         tolayer3(1, packet);
         // Increment expected sequence number
         B.expectseq = B.expectseq + 1;
+        // Update last_in_order_packet
+        B.last_in_order_pkt = packet;
     } else {
-        printf("\nChecksum failed or sequence number out of order\n");
+        printf("\nChecksum mismatch or sequence number out of order\n");
+        // Send last in order packet if something went wrong. The new packet is dropped
+        tolayer3(1, B.last_in_order_pkt);
     }
 
 }
@@ -134,20 +151,16 @@ A_input(ack) struct pkt ack;
     arrives at the A-side. packet is the (possibly corrupted) packet sent from the B-side. */
     printf("\nA_INPUT");
 
-
     // Recieve ACK and check sequence number
     if(A.base == ack.seqnum) {
         printf("\nStop\n");
         stoptimer(0);
         A.base = A.base + 1;
     } else {
-        printf("\nStart\n");
-        starttimer(0, 20.0);
+        // Start timer 
+        // printf("\nStart\n");
+        // starttimer(0, 6.0);
     }
-
-    // If timer expires while waiting for ACK then message needs to be sent again
-
-
 }
 
 
@@ -161,19 +174,20 @@ A_timerinterrupt()
     printf("\nA_TIMER_INTERRUPT\n");
 
     
+    starttimer(0, 10.0);
     /* retransmission window is determined by base and nextseq
     - loop until base == nextseq
     */
-    // int i = A.base;
-    // for (i; i < A.nextseq; ++i) {
-    //     //find packet at index
-    //     struct pkt *packet = &A.buffer[i % 50];
-    //     //re-transmit packet to layer 3
-    //     tolayer3(0, *packet);
-    // }
-    //timer needs to be restarted because of an interrupt code somewhere
-    //default 10 est_rtt, 0 for first arg (AorB) to signify starting timer 'A'
-    // starttimer(0, A.est_rtt);
+    int i = A.base;
+    for (i; i <= A.nextseq; ++i) {
+        printf("retransmit\n");
+        //find packet at index
+        struct pkt *packet = &A.buffer[i % 50];
+        //re-transmit packet to layer 3
+        tolayer3(0, *packet);
+    }
+    
+    
 }
 /* called when B's timer goes off */
 B_timerinterrupt()
@@ -374,7 +388,7 @@ init() /* initialize the simulator */
 
     printf("Enter packet loss probability [enter 0.0 for no loss]:");
     // scanf("%f", &lossprob);
-    lossprob = 0.0;
+    lossprob = 0.2;
     printf("%f\n", lossprob);
 
     printf("Enter packet corruption probability [0.0 for no corruption]:");
@@ -384,7 +398,7 @@ init() /* initialize the simulator */
 
     printf("Enter average time between messages from sender's layer5 [ > 0.0]:");
     // scanf("%f", &lambda);
-    lambda = 10.0;
+    lambda = 3.0;
     printf("%f\n", lambda);
 
     printf("Enter TRACE:");
