@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <stdlib.h>
 
 /* ******************************************************************
 ALTERNATING BIT AND GO-BACK-N NETWORK EMULATOR: VERSION 1.1 J.F.Kurose
@@ -38,7 +37,7 @@ struct pkt
 };
 
 
-//sender
+// A sender
 struct Sender {
     int base;
     int nextseq;
@@ -47,43 +46,28 @@ struct Sender {
     struct pkt buffer[50]; //Buffer for 50 packets/messages
     float est_rtt;
 } A;
-
-//receiver
+// B receiver
 struct Receiver {
-    int expect_seq;
+    int expectseq;
     struct pkt ack_packet;
 } B;
 
 /* the following routine will be called once (only) before any other */
 /* entity A routines are called. You can use it to do any initialization */
-void A_init()
+A_init()
 {
-    printf("\nA_INiT");
-    A.base = 1;
-    A.nextseq = 1;
+    A.base = 0;
+    A.nextseq = 0;
     A.window_size = 8; //default size 8
     A.buffer_next = 1;
     A.est_rtt = 10; // est_rtt is 5 when no other messages are in the "medium"
 }
-
-/* the following rouytine will be called once (only) before any other */
-/* entity B routines are called. You can use it to do any initialization */
 B_init()
 {
-    printf("\nB_INiT");
-    B.expect_seq =1;
+    B.expectseq = 0;
     B.ack_packet.acknum = 0;
     B.ack_packet.seqnum = -1; //
     memset(B.ack_packet.payload,0,20); //init packet payload to all zeros
-
-    //create the checksum with data, sequence, and ack fields
-    int checksum = B.ack_packet.seqnum + B.ack_packet.acknum;
-    int i = 0;
-    for(int i; i<20; i++) {
-        checksum = checksum + B.ack_packet.payload[i];
-    }
-
-    B.ack_packet.checksum = checksum;
 }
 
 
@@ -100,19 +84,22 @@ A_output(message) struct msg message;
     // Add null character to end of message
     message.data[20] = '\0';
 
+    // Create packet
     struct pkt my_pkt;
-
-    my_pkt.seqnum = 1;
-    my_pkt.acknum = 2;
-
-    // Create checksum and payloadf for packet
+    my_pkt.seqnum = A.nextseq;
+    my_pkt.acknum = 0;
     my_pkt.checksum = create_checksum(message.data);
     strncpy(my_pkt.payload, message.data, 20);
 
+    // if(A.base == 0)
+    // {starttimer(0, 11.0);}
+    starttimer(0, 11.0);
 
+    // Send packet to reciever
     tolayer3(0, my_pkt);
-    // starttimer(0, 2000);
-    // printf("start timer!");
+
+    // Incremement next sequence number
+    A.nextseq = A.nextseq + 1;
 }
 
 /* called from layer 3, when a packet arrives for layer 4 at B*/
@@ -125,28 +112,39 @@ B_input(packet) struct pkt packet;
     
     int checksum = create_checksum(packet.payload);
     // If checksum is OK then send to layer 5 and ACK
-    if(packet.checksum == checksum) {
-        // Send up to layer 5
+    if(packet.checksum == checksum && packet.seqnum == B.expectseq) {
+        // Deliver to layer 5
         tolayer5(1, packet.payload);
         // Send ACK
         tolayer3(1, packet);
+        // Increment expected sequence number
+        B.expectseq = B.expectseq + 1;
     } else {
-        printf("\nChecksum failed\n");
+        printf("\nChecksum failed or sequence number out of order\n");
     }
 
 }
 
 
 /* called from layer 3, when a packet arrives for layer 4 */
-A_input(packet) struct pkt packet;
+A_input(ack) struct pkt ack;
 {
     /* where packet is a structure of type pkt. This routine will be called whenever
     a packet sent from the B-side (i.e., as a result of a tolayer3() being done by a B-side procedure)
     arrives at the A-side. packet is the (possibly corrupted) packet sent from the B-side. */
     printf("\nA_INPUT");
-    // stoptimer(0);
+
 
     // Recieve ACK and check sequence number
+    if(A.base == ack.seqnum) {
+        printf("\nStop\n");
+        stoptimer(0);
+        A.base = A.base + 1;
+    } else {
+        printf("\nStart\n");
+        starttimer(0, 20.0);
+    }
+
     // If timer expires while waiting for ACK then message needs to be sent again
 
 
@@ -185,8 +183,7 @@ B_timerinterrupt()
 
 
 create_checksum(char *string) {
-    printf("\n%s\n",string);
-
+    // printf("\n%s\n",string);
 
     int sum = 0;
     int checksum;
@@ -360,7 +357,7 @@ main()
     }
 
 terminate:
-    printf(" Simulator terminated at time %f\n after sending %d msgs from layer5\n", time, nsim);
+    printf(" \nSimulator terminated at time %f\n after sending %d msgs from layer5\n", time, nsim);
 }
 
 init() /* initialize the simulator */
@@ -371,13 +368,25 @@ init() /* initialize the simulator */
 
     printf("----- Stop and Wait Network Simulator Version 1.1 -------- \n\n");
     printf("Enter the number of messages to simulate: ");
-    scanf("%d", &nsimmax);
+    // scanf("%d", &nsimmax);
+    nsimmax = 10;
+    printf("%d\n", nsimmax);
+
     printf("Enter packet loss probability [enter 0.0 for no loss]:");
-    scanf("%f", &lossprob);
+    // scanf("%f", &lossprob);
+    lossprob = 0.0;
+    printf("%f\n", lossprob);
+
     printf("Enter packet corruption probability [0.0 for no corruption]:");
-    scanf("%f", &corruptprob);
+    // scanf("%f", &corruptprob);
+    corruptprob = 0.0;
+    printf("%f\n", corruptprob);
+
     printf("Enter average time between messages from sender's layer5 [ > 0.0]:");
-    scanf("%f", &lambda);
+    // scanf("%f", &lambda);
+    lambda = 10.0;
+    printf("%f\n", lambda);
+
     printf("Enter TRACE:");
     scanf("%d", &TRACE);
 
@@ -409,8 +418,9 @@ init() /* initialize the simulator */
 /****************************************************************************/
 float jimsrand()
 {
+    double mmm = 2147483647; /* largest int - MACHINE DEPENDENT!!!!!!!! */
     float x;                 /* individual students may need to change mmm */
-    x = ((double) rand() / (RAND_MAX));   /* x should be uniform in [0,1] */
+    x = rand() / mmm;        /* x should be uniform in [0,1] */
     // printf("%f\n", x);
     return (x);
 }
@@ -423,7 +433,7 @@ generate_next_arrival()
 {
     double x, log(), ceil();
     struct event *evptr;
-    // char *malloc();
+    char *malloc();
     float ttime;
     int tempint;
 
@@ -537,7 +547,7 @@ float increment;
 
     struct event *q;
     struct event *evptr;
-    // char *malloc();
+    char *malloc();
 
     if (TRACE > 2)
         printf(" START TIMER: starting timer at %f\n", time);
@@ -564,7 +574,7 @@ struct pkt packet;
 {
     struct pkt *mypktptr;
     struct event *evptr, *q;
-    // char *malloc();
+    char *malloc();
     float lastime, x, jimsrand();
     int i;
 
