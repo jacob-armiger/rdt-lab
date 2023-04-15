@@ -1,5 +1,6 @@
 #include <stdio.h>
 
+
 /* ******************************************************************
 ALTERNATING BIT AND GO-BACK-N NETWORK EMULATOR: VERSION 1.1 J.F.Kurose
 
@@ -72,6 +73,10 @@ B_init()
     memset(B.ack_packet.payload,0,20); //init packet payload to all zeros
 }
 
+checksum_check(struct pkt packet, int cur_sum);
+create_checksum(struct pkt packet,char message[21]);
+
+
 
 /********* STUDENTS WRITE THE NEXT SEVEN ROUTINES *********/
 
@@ -90,7 +95,7 @@ A_output(message) struct msg message;
     struct pkt my_pkt;
     my_pkt.seqnum = A.nextseq;
     my_pkt.acknum = 0;
-    my_pkt.checksum = create_checksum(message.data);
+    my_pkt.checksum = create_checksum(my_pkt,message.data);
     strncpy(my_pkt.payload, message.data, 20);
 
     // Add packet to buffer
@@ -99,6 +104,7 @@ A_output(message) struct msg message;
         // Start timer
         // if(A.nextseq == 0)
         starttimer(0, 15.0);
+    
 
         // Send packet to reciever
         tolayer3(0, A.buffer[A.buffer_index]);
@@ -119,9 +125,10 @@ B_input(packet) struct pkt packet;
     arrives at the B-side. packet is the (possibly corrupted) packet sent from the A-side */
     printf("\nB_INPUT");
     
-    int checksum = create_checksum(packet.payload);
+    //int checksum = create_checksum(packet.payload);
+    
     // If checksum is OK then send to layer 5 and send ACK
-    if(packet.checksum == checksum && packet.seqnum == B.expectseq) {
+    if(checksum_check(packet,packet.checksum) == 1 && packet.seqnum == B.expectseq) {
         // Deliver to layer 5
         printf("\n--------------DELIVER--------------\n");
         tolayer5(1, packet.payload);
@@ -141,21 +148,38 @@ B_input(packet) struct pkt packet;
 
 
 /* called from layer 3, when a packet arrives for layer 4 */
-A_input(ack) struct pkt ack;
-{
+A_input(struct pkt packet) {
     /* where packet is a structure of type pkt. This routine will be called whenever
     a packet sent from the B-side (i.e., as a result of a tolayer3() being done by a B-side procedure)
     arrives at the A-side. packet is the (possibly corrupted) packet sent from the B-side. */
     printf("\nA_INPUT");
 
+    if (checksum_check(packet,packet.checksum) == 0) {
+        print("A_input: Corrupted Packet.\n");
+        return;
+    }
+
     // Recieve ACK and check sequence number
-    if(A.base == ack.seqnum) {
-        printf("\nStop\n");
+    A.base = packet.acknum + 1; 
+    if(A.base == packet.seqnum) {
+        printf("\nA_input: Stop\n");
         stoptimer(0);
-        A.base = A.base + 1;
+        
+        //calculate new send window
+
+        //this loop is partly from github, Need to understand exactly what it's doing,
+        //i'll keep it for now just so we can see working code
+        while (A.nextseq < A.buffer_index && A.nextseq < A.base + A.window_size) {
+            struct pkt *pack = &A.buffer[A.nextseq % 50];
+            tolayer3(0, *pack);
+            if (A.base == A.nextseq)
+                starttimer(0, A.estimated_rtt);
+            ++A.nextseq;
+        }
     } else {
         // Start timer 
-        // printf("\nStart\n");
+        printf("\nA_input: Start\n");
+        starttimer(0,A.est_rtt);
         // starttimer(0, 6.0);
     }
 }
@@ -192,21 +216,27 @@ B_timerinterrupt()
     printf("\nB_TIMER_INTERRUPT\n");
 }
 
+//sender side, called 
+create_checksum(struct pkt packet,char message[21]) {
+    //sum of all segments
+    int sum = packet.acknum + packet.seqnum;
 
-create_checksum(char *string) {
-    // printf("\n%s\n",string);
+    int i = 0;
 
-    int sum = 0;
-    int checksum;
-    for(int i = 0; i < strlen(string); i++) {
-        sum += string[i];
+    for(i; i<21; i++) {
+        sum = sum + message[i];
     }
 
-    int key = 17;
+    return sum;
+}
 
-    checksum = sum % key;
-    
-    return checksum;
+//receiver side
+checksum_check(struct pkt packet, int cur_sum) {
+    if (create_checksum(packet,packet.payload) != cur_sum) {
+        return 0;
+    } else {
+        return 1; 
+    }
 }
 
 /* Note that with simplex transfer from a-to-B, there is no B_output() */
