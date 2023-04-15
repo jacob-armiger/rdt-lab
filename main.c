@@ -74,10 +74,6 @@ B_init()
 
 
 /********* STUDENTS WRITE THE NEXT SEVEN ROUTINES *********/
-/*
-TODO:
-* Not sure if timer start/stop is correct
-*/
 
 /* called from layer 5, passed the data to be sent to other side */
 A_output(message) struct msg message;
@@ -102,7 +98,7 @@ A_output(message) struct msg message;
     while(A.nextseq <= A.base) {
         // Start timer
         // if(A.nextseq == 0)
-        starttimer(0, 10.0);
+        starttimer(0, 15.0);
 
         // Send packet to reciever
         tolayer3(0, A.buffer[A.buffer_index]);
@@ -127,6 +123,7 @@ B_input(packet) struct pkt packet;
     // If checksum is OK then send to layer 5 and send ACK
     if(packet.checksum == checksum && packet.seqnum == B.expectseq) {
         // Deliver to layer 5
+        printf("\n--------------DELIVER--------------\n");
         tolayer5(1, packet.payload);
         // Send ACK
         tolayer3(1, packet);
@@ -174,7 +171,7 @@ A_timerinterrupt()
     printf("\nA_TIMER_INTERRUPT\n");
 
     
-    starttimer(0, 10.0);
+    starttimer(0, 15.0);
     /* retransmission window is determined by base and nextseq
     - loop until base == nextseq
     */
@@ -383,12 +380,12 @@ init() /* initialize the simulator */
     printf("----- Stop and Wait Network Simulator Version 1.1 -------- \n\n");
     printf("Enter the number of messages to simulate: ");
     // scanf("%d", &nsimmax);
-    nsimmax = 10;
+    nsimmax = 3;
     printf("%d\n", nsimmax);
 
     printf("Enter packet loss probability [enter 0.0 for no loss]:");
     // scanf("%f", &lossprob);
-    lossprob = 0.2;
+    lossprob = 0.0;
     printf("%f\n", lossprob);
 
     printf("Enter packet corruption probability [0.0 for no corruption]:");
@@ -398,7 +395,7 @@ init() /* initialize the simulator */
 
     printf("Enter average time between messages from sender's layer5 [ > 0.0]:");
     // scanf("%f", &lambda);
-    lambda = 3.0;
+    lambda = 0.1;
     printf("%f\n", lambda);
 
     printf("Enter TRACE:");
