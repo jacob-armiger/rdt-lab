@@ -22,7 +22,7 @@ or lost, according to user-defined probabilities
 /* to layer 5 via the students transport level protocol entities. */
 struct msg
 {
-    char data[21];
+    char data[20];
 };
 
 /* a packet is the data unit passed from layer 4 (students code) to layer */
@@ -33,7 +33,7 @@ struct pkt
     int seqnum;
     int acknum;
     int checksum;
-    char payload[21];
+    char payload[20];
 };
 
 
@@ -76,6 +76,7 @@ B_init()
     memset(B.ack_packet.payload,0,20); //init packet payload to all zeros
 
     //create the checksum with data, sequence, and ack fields
+    /*
     int checksum = B.ack_packet.seqnum + B.ack_packet.acknum;
     int i = 0;
     for(int i; i<20; i++) {
@@ -83,6 +84,9 @@ B_init()
     }
 
     B.ack_packet.checksum = checksum;
+    */
+   //or just payload field
+   B.ack_packet.checksum = create_checksum(B.ack_packet.payload);
 }
 
 
@@ -107,7 +111,6 @@ A_output(message) struct msg message;
     // Create checksum and payloadf for packet
     my_pkt.checksum = create_checksum(message.data);
     strncpy(my_pkt.payload, message.data, 20);
-
 
     tolayer3(0, my_pkt);
 }
@@ -137,14 +140,28 @@ B_input(packet) struct pkt packet;
 /* called from layer 3, when a packet arrives for layer 4 */
 A_input(packet) struct pkt packet;
 {
+    int created_checksum = create_checksum(packet);
+    int existing_checksum = packet.checksum;
+
+    //compare to see if packet has been corrupted over transfer
+
     /* where packet is a structure of type pkt. This routine will be called whenever
     a packet sent from the B-side (i.e., as a result of a tolayer3() being done by a B-side procedure)
     arrives at the A-side. packet is the (possibly corrupted) packet sent from the B-side. */
     printf("\nA_INPUT");
 
-    // Recieve ACK and check sequence number
-    // If timer expires while waiting for ACK then message needs to be sent again
+    // compare checksum values
+    if (created_checksum != existing_checksum) { printf("Checksum is corrupted.\n"); return;}
 
+    //check if acknum is at the end of the sequence, this means all packets have been transmitted
+    if (packet.acknum == (A.nextseq-1)) {
+        //restart the timer and calculate new send window
+    } else {
+        //start a timer
+    }
+
+    // If timer expires while waiting for ACK then message needs to be sent again
+    //how do we do this? 
 }
 
 
