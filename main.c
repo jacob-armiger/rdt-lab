@@ -1,4 +1,6 @@
+ sandbox.c
 #include <stdio.h>
+#include <string.h>
 
 /* ******************************************************************
 ALTERNATING BIT AND GO-BACK-N NETWORK EMULATOR: VERSION 1.1 J.F.Kurose
@@ -22,7 +24,7 @@ or lost, according to user-defined probabilities
 /* to layer 5 via the students transport level protocol entities. */
 struct msg
 {
-    char data[21];
+    char data[20];
 };
 
 /* a packet is the data unit passed from layer 4 (students code) to layer */
@@ -33,7 +35,7 @@ struct pkt
     int seqnum;
     int acknum;
     int checksum;
-    char payload[21];
+    char payload[20];
 };
 
 
@@ -55,163 +57,185 @@ struct Receiver {
 
 /* the following routine will be called once (only) before any other */
 /* entity A routines are called. You can use it to do any initialization */
-A_init()
+void A_init()
 {
-    A.base = 0;
-    A.nextseq = 0;
+    A.base = 1;
+    A.nextseq = 1;
     A.window_size = 8; //default size 8
-    A.buffer_index = 0;
-    A.est_rtt = 10; // est_rtt is 5 when no other messages are in the "medium"
+    A.buffer_index = 1;
+    A.est_rtt = 15; // est_rtt is 5 when no other messages are in the "medium"
 }
-B_init()
+void B_init()
 {
-    B.expectseq = 0;
+    B.expectseq = 1;
     B.ack_packet.acknum = 0;
     B.ack_packet.seqnum = -1; //
+    B.last_in_order_pkt.acknum = 0;
     B.last_in_order_pkt.seqnum = -1;
-    memset(B.ack_packet.payload,0,20); //init packet payload to all zeros
+    memset(B.last_in_order_pkt.payload,0,20); //init packet payload to all zeros
 }
 
+//return true or false to indicate packet corruption
+int checksum_check(struct pkt *packet, int cur_sum);
+//return a new checksum for a packet
+int create_checksum(struct pkt *packet,char message[20]);
 
 /********* STUDENTS WRITE THE NEXT SEVEN ROUTINES *********/
 
 /* called from layer 5, passed the data to be sent to other side */
-A_output(message) struct msg message;
+
+void A_output(message) struct msg message;
 {
     /* where message is a structure of type msg, containing data to be sent to the
     B-side. This routine will be called whenever the upper layer at the sending side (A) has a message
     to send. It is the job of your protocol to ensure that the data in such a message is delivered in-order,
     and correctly, to the receiving side upper layer. */
-    printf("\nA_OUTPUT");
+    printf("\nA_OUTPUT\n");
     // Add null character to end of message
     message.data[20] = '\0';
-
+    printf("Message: %s \n",message.data);
     // Create packet
     struct pkt my_pkt;
-    my_pkt.seqnum = A.nextseq;
-    my_pkt.acknum = 0;
-    my_pkt.checksum = create_checksum(message.data);
+    my_pkt.seqnum = A.buffer_index;
+    //my_pkt.acknum = 0;
+    my_pkt.checksum = create_checksum(&my_pkt,message.data);
     strncpy(my_pkt.payload, message.data, 20);
 
     // Add packet to buffer
     A.buffer[A.buffer_index] = my_pkt;
-    while(A.nextseq <= A.base) {
-        // Start timer
-        // if(A.nextseq == 0)
-        starttimer(0, 15.0);
-
-        // Send packet to reciever
-        tolayer3(0, A.buffer[A.buffer_index]);
-
-        // Increment sequence number and decrement buffer index
-        A.nextseq = A.nextseq + 1;
-        A.buffer_index = A.buffer_index - 1;
-    }
-    // Increment buffer index for next loop
     A.buffer_index += 1;
+
+    for(A.nextseq; (A.nextseq < A.buffer_index) && (A.nextseq < A.base + A.window_size); A.nextseq++) {
+        //If starttimer is called when a timer is already activated, a warning is given but the current timer is kept
+        struct pkt *pack = &A.buffer[A.nextseq%50];
+        tolayer3(0,*pack);
+        if (A.base == A.nextseq) starttimer(0, A.est_rtt);
+    }
+
 }
 
-/* called from layer 3, when a packet arrives for layer 4 at B*/
-B_input(packet) struct pkt packet;
+// called from layer 3, when a packet arrives for layer 4 at B
+void B_input(packet) struct pkt packet;
 {
     /* where packet is a structure of type pkt. This routine will be called whenever
     a packet sent from the A-side (i.e., as a result of a tolayer3() being done by a A-side procedure)
     arrives at the B-side. packet is the (possibly corrupted) packet sent from the A-side */
-    printf("\nB_INPUT");
-    
-    int checksum = create_checksum(packet.payload);
+    printf("\nB_INPUT\n");
+
     // If checksum is OK then send to layer 5 and send ACK
-    if(packet.checksum == checksum && packet.seqnum == B.expectseq) {
-        // Deliver to layer 5
+    if ((B.expectseq == packet.seqnum) && (checksum_check(&packet,packet.checksum)==1)){
         printf("\n--------------DELIVER--------------\n");
         tolayer5(1, packet.payload);
-        // Send ACK
-        tolayer3(1, packet);
-        // Increment expected sequence number
-        B.expectseq = B.expectseq + 1;
-        // Update last_in_order_packet
-        B.last_in_order_pkt = packet;
+        B.last_in_order_pkt.acknum = B.expectseq;
+        B.last_in_order_pkt.checksum = create_checksum(&B.last_in_order_pkt,B.last_in_order_pkt.payload);
+        tolayer3(1, B.last_in_order_pkt);
+        ++B.expectseq;
     } else {
         printf("\nChecksum mismatch or sequence number out of order\n");
-        // Send last in order packet if something went wrong. The new packet is dropped
+
+        if (packet.checksum != create_checksum(&packet,packet.payload)) {
+            printf("Checksum is %d, and should be %d.\n", packet.checksum,create_checksum(&packet,packet.payload));
+        }
+        if (packet.seqnum != B.expectseq) {
+            printf("Seqnum is %d, and should be %d.\n", packet.seqnum, B.expectseq);
+        }
+        // Send lst in order packet if something went wrong. The new packet is dropped
         tolayer3(1, B.last_in_order_pkt);
     }
-
 }
 
 
 /* called from layer 3, when a packet arrives for layer 4 */
-A_input(ack) struct pkt ack;
-{
+void A_input(struct pkt packet) {
     /* where packet is a structure of type pkt. This routine will be called whenever
     a packet sent from the B-side (i.e., as a result of a tolayer3() being done by a B-side procedure)
     arrives at the A-side. packet is the (possibly corrupted) packet sent from the B-side. */
-    printf("\nA_INPUT");
+    printf("\nA_INPUT\n");
+
+    if (checksum_check(&packet,packet.checksum) == 0) {
+        printf("A_input: Corrupted Packet.\n");
+        return;
+    }
+    if (packet.acknum < A.base) return; //Nak
 
     // Recieve ACK and check sequence number
-    if(A.base == ack.seqnum) {
-        printf("\nStop\n");
+    A.base = packet.acknum + 1;
+    if(A.base == A.nextseq) {
+        printf("\nA_input: Stop\n");
         stoptimer(0);
-        A.base = A.base + 1;
+
+        //calculate new send window
+
+        for (A.nextseq; (A.nextseq < A.buffer_index) && (A.nextseq < A.base + A.window_size); A.nextseq++){
+            struct pkt *pack = &A.buffer[A.nextseq];
+            tolayer3(0,*pack);
+            if (A.base == A.nextseq) starttimer(0, A.est_rtt);
+        }
     } else {
-        // Start timer 
-        // printf("\nStart\n");
-        // starttimer(0, 6.0);
+        // Start timer
+        starttimer(0,A.est_rtt);
     }
 }
 
-
-
 /* called when A's timer goes off */
-A_timerinterrupt()
+void A_timerinterrupt()
 {
     /* This routine will be called when A's timer expires (thus generating a timer
     interrupt). You'll probably want to use this routine to control the retransmission of packets.
     See starttimer() and stoptimer() below for how the timer is started and stopped. */
     printf("\nA_TIMER_INTERRUPT\n");
 
-    
-    starttimer(0, 15.0);
+
+
     /* retransmission window is determined by base and nextseq
     - loop until base == nextseq
     */
-    int i = A.base;
-    for (i; i <= A.nextseq; ++i) {
-        printf("retransmit\n");
+    for (int i = A.base; i < A.nextseq; ++i) {
         //find packet at index
-        struct pkt *packet = &A.buffer[i % 50];
+        struct pkt *packet = &A.buffer[i%50];
+        printf("\nRetransmit Packet: %s\n",packet->payload);
         //re-transmit packet to layer 3
         tolayer3(0, *packet);
     }
-    
-    
+    starttimer(0, A.est_rtt);
 }
+
 /* called when B's timer goes off */
-B_timerinterrupt()
+void B_timerinterrupt()
 {
     printf("\nB_TIMER_INTERRUPT\n");
 }
 
+//sender side, called
+int create_checksum(struct pkt *packet,char message[20]) {
+    //sum of all segments
+    //printf("create checksum message: %s \n", message);
+    int sum = packet->acknum + packet->seqnum;
 
-create_checksum(char *string) {
-    // printf("\n%s\n",string);
+    int i = 0;
 
-    int sum = 0;
-    int checksum;
-    for(int i = 0; i < strlen(string); i++) {
-        sum += string[i];
+    for(i; i<20; i++) {
+        //printf("message[i]: %d",message[i]);
+        sum = sum + message[i];
+        //printf("sum: %d",sum);
     }
+    //printf("\nCREATE CHECKSUM\n");
+    //printf("Sum: %f",sum);
+    return sum;
+}
 
-    int key = 17;
-
-    checksum = sum % key;
-    
-    return checksum;
+//receiver side
+int checksum_check(struct pkt *packet, int cur_sum) {
+    if (create_checksum(packet,packet->payload) != cur_sum) {
+        return 0;
+    } else {
+        return 1;
+    }
 }
 
 /* Note that with simplex transfer from a-to-B, there is no B_output() */
 /* need be completed only for extra credit */
-B_output(message) struct msg message;{}
+void B_output(message) struct msg message;{}
 
 /****************************************************************
  * API provided for us to call found on LINE 376
