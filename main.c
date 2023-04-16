@@ -1,4 +1,3 @@
- sandbox.c
 #include <stdio.h>
 #include <string.h>
 
@@ -47,9 +46,20 @@ struct Sender {
     int buffer_index;
     struct pkt buffer[50]; //Buffer for 50 packets/messages
     float est_rtt;
+
+    int expectseq;
+    struct pkt ack_packet;
+    struct pkt last_in_order_pkt;
 } A;
 // B receiver
 struct Receiver {
+    int base;
+    int nextseq;
+    int window_size;
+    int buffer_index;
+    struct pkt buffer[50]; //Buffer for 50 packets/messages
+    float est_rtt;
+
     int expectseq;
     struct pkt ack_packet;
     struct pkt last_in_order_pkt;
@@ -64,9 +74,22 @@ void A_init()
     A.window_size = 8; //default size 8
     A.buffer_index = 1;
     A.est_rtt = 15; // est_rtt is 5 when no other messages are in the "medium"
+
+    A.expectseq = 1;
+    A.ack_packet.acknum = 0;
+    A.ack_packet.seqnum = -1; //
+    A.last_in_order_pkt.acknum = 0;
+    A.last_in_order_pkt.seqnum = -1;
+    memset(A.last_in_order_pkt.payload,0,20); //init packet payload to all zeros
 }
 void B_init()
 {
+    B.base = 1;
+    B.nextseq = 1;
+    B.window_size = 8; //default size 8
+    B.buffer_index = 1;
+    B.est_rtt = 15; // est_rtt is 5 when no other messages are in the "medium"
+    
     B.expectseq = 1;
     B.ack_packet.acknum = 0;
     B.ack_packet.seqnum = -1; //
@@ -142,6 +165,31 @@ void B_input(packet) struct pkt packet;
         // Send lst in order packet if something went wrong. The new packet is dropped
         tolayer3(1, B.last_in_order_pkt);
     }
+    // if(ACK_FLAG) {
+    //
+    //     if (checksum_check(&packet,packet.checksum) == 0) {
+    //         printf("A_input: Corrupted Packet.\n");
+    //         return;
+    //     }
+    //     if (packet.acknum < B.base) return; //Nak
+
+    //     // Recieve ACK and check sequence number
+    //     B.base = packet.acknum + 1;
+    //     if(B.base == B.nextseq) {
+    //         stoptimer(1);
+
+    //         //calculate new send window
+
+    //         for (B.nextseq; (B.nextseq < B.buffer_index) && (B.nextseq < B.base + B.window_size); B.nextseq++){
+    //             struct pkt *pack = &B.buffer[B.nextseq];
+    //             tolayer3(1,*pack);
+    //             if (B.base == B.nextseq) starttimer(1, B.est_rtt);
+    //         }
+    //     } else {
+    //         // Start timer
+    //         starttimer(1,B.est_rtt);
+    //     }
+    // }
 }
 
 
@@ -152,6 +200,30 @@ void A_input(struct pkt packet) {
     arrives at the A-side. packet is the (possibly corrupted) packet sent from the B-side. */
     printf("\nA_INPUT\n");
 
+    // if (!ACK_FLAG) {
+    //     // If checksum is OK then send to layer 5 and send ACK
+    //     if ((A.expectseq == packet.seqnum) && (checksum_check(&packet,packet.checksum)==1)){
+    //         printf("\n--------------DELIVER-A-------------\n");
+    //         tolayer5(0, packet.payload);
+    //         A.last_in_order_pkt.acknum = A.expectseq;
+    //         A.last_in_order_pkt.checksum = create_checksum(&A.last_in_order_pkt,A.last_in_order_pkt.payload);
+    //         tolayer3(0, A.last_in_order_pkt);
+    //         ++A.expectseq;
+    //         return;
+    //     } else {
+    //         printf("\nChecksum mismatch or sequence number out of order\n");
+
+    //         if (packet.checksum != create_checksum(&packet,packet.payload)) {
+    //             printf("Checksum is %d, and should be %d.\n", packet.checksum,create_checksum(&packet,packet.payload));
+    //         }
+    //         if (packet.seqnum != A.expectseq) {
+    //             printf("Seqnum is %d, and should be %d.\n", packet.seqnum, A.expectseq);
+    //         }
+    //         // Send lst in order packet if something went wrong. The new packet is dropped
+    //         tolayer3(0, A.last_in_order_pkt);
+    //     }
+    // }
+
     if (checksum_check(&packet,packet.checksum) == 0) {
         printf("A_input: Corrupted Packet.\n");
         return;
@@ -161,7 +233,6 @@ void A_input(struct pkt packet) {
     // Recieve ACK and check sequence number
     A.base = packet.acknum + 1;
     if(A.base == A.nextseq) {
-        printf("\nA_input: Stop\n");
         stoptimer(0);
 
         //calculate new send window
@@ -185,8 +256,6 @@ void A_timerinterrupt()
     See starttimer() and stoptimer() below for how the timer is started and stopped. */
     printf("\nA_TIMER_INTERRUPT\n");
 
-
-
     /* retransmission window is determined by base and nextseq
     - loop until base == nextseq
     */
@@ -200,10 +269,47 @@ void A_timerinterrupt()
     starttimer(0, A.est_rtt);
 }
 
+void B_output(message) struct msg message;{
+    printf("\nB_OUTPUT\n");
+    // Add null character to end of message
+    message.data[20] = '\0';
+    printf("Message: %s \n",message.data);
+    // Create packet
+    struct pkt my_pkt;
+    my_pkt.seqnum = B.buffer_index;
+    //my_pkt.acknum = 0;
+    my_pkt.checksum = create_checksum(&my_pkt,message.data);
+    strncpy(my_pkt.payload, message.data, 20);
+
+    // Add packet to buffer
+    B.buffer[B.buffer_index] = my_pkt;
+    B.buffer_index += 1;
+
+    for(B.nextseq; (B.nextseq < B.buffer_index) && (B.nextseq < B.base + B.window_size); B.nextseq++) {
+        //If starttimer is called when a timer is already activated, a warning is given but the current timer is kept
+        struct pkt *pack = &B.buffer[B.nextseq%50];
+        tolayer3(1,*pack);
+        if (B.base == B.nextseq) starttimer(1, B.est_rtt);
+    }
+
+}
+
 /* called when B's timer goes off */
 void B_timerinterrupt()
 {
     printf("\nB_TIMER_INTERRUPT\n");
+
+    /* retransmission window is determined by base and nextseq
+    - loop until base == nextseq
+    */
+    for (int i = B.base; i < B.nextseq; ++i) {
+        //find packet at index
+        struct pkt *packet = &B.buffer[i%50];
+        printf("\nRetransmit Packet: %s\n",packet->payload);
+        //re-transmit packet to layer 3
+        tolayer3(1, *packet);
+    }
+    starttimer(1, B.est_rtt);
 }
 
 //sender side, called
@@ -233,9 +339,6 @@ int checksum_check(struct pkt *packet, int cur_sum) {
     }
 }
 
-/* Note that with simplex transfer from a-to-B, there is no B_output() */
-/* need be completed only for extra credit */
-void B_output(message) struct msg message;{}
 
 /****************************************************************
  * API provided for us to call found on LINE 376
@@ -404,22 +507,22 @@ init() /* initialize the simulator */
     printf("----- Stop and Wait Network Simulator Version 1.1 -------- \n\n");
     printf("Enter the number of messages to simulate: ");
     // scanf("%d", &nsimmax);
-    nsimmax = 3;
+    nsimmax = 5;
     printf("%d\n", nsimmax);
 
     printf("Enter packet loss probability [enter 0.0 for no loss]:");
     // scanf("%f", &lossprob);
-    lossprob = 0.0;
+    lossprob = 0.6; //0.6
     printf("%f\n", lossprob);
 
     printf("Enter packet corruption probability [0.0 for no corruption]:");
     // scanf("%f", &corruptprob);
-    corruptprob = 0.0;
+    corruptprob = 0.5; //0.5
     printf("%f\n", corruptprob);
 
     printf("Enter average time between messages from sender's layer5 [ > 0.0]:");
     // scanf("%f", &lambda);
-    lambda = 0.1;
+    lambda = 7.0;
     printf("%f\n", lambda);
 
     printf("Enter TRACE:");
