@@ -42,26 +42,24 @@ struct pkt
 struct Sender {
     int base;
     int nextseq;
-    int window_size;
+    int window;
     int buffer_index;
     struct pkt buffer[50]; //Buffer for 50 packets/messages
     float est_rtt;
 
     int expectseq;
-    struct pkt ack_packet;
     struct pkt last_in_order_pkt;
 } A;
 // B receiver
 struct Receiver {
     int base;
     int nextseq;
-    int window_size;
+    int window;
     int buffer_index;
     struct pkt buffer[50]; //Buffer for 50 packets/messages
     float est_rtt;
 
     int expectseq;
-    struct pkt ack_packet;
     struct pkt last_in_order_pkt;
 } B;
 
@@ -71,28 +69,13 @@ void A_init()
 {
     A.base = 1;
     A.nextseq = 1;
-    A.window_size = 8; //default size 8
+    A.window = 8; //default size 8
     A.buffer_index = 1;
     A.est_rtt = 15; // est_rtt is 5 when no other messages are in the "medium"
-
-    A.expectseq = 1;
-    A.ack_packet.acknum = 0;
-    A.ack_packet.seqnum = -1; //
-    A.last_in_order_pkt.acknum = 0;
-    A.last_in_order_pkt.seqnum = -1;
-    memset(A.last_in_order_pkt.payload,0,20); //init packet payload to all zeros
 }
 void B_init()
 {
-    B.base = 1;
-    B.nextseq = 1;
-    B.window_size = 8; //default size 8
-    B.buffer_index = 1;
-    B.est_rtt = 15; // est_rtt is 5 when no other messages are in the "medium"
-    
     B.expectseq = 1;
-    B.ack_packet.acknum = 0;
-    B.ack_packet.seqnum = -1; //
     B.last_in_order_pkt.acknum = 0;
     B.last_in_order_pkt.seqnum = -1;
     memset(B.last_in_order_pkt.payload,0,20); //init packet payload to all zeros
@@ -128,7 +111,7 @@ void A_output(message) struct msg message;
     A.buffer[A.buffer_index] = my_pkt;
     A.buffer_index += 1;
 
-    for(A.nextseq; (A.nextseq < A.buffer_index) && (A.nextseq < A.base + A.window_size); A.nextseq++) {
+    for(A.nextseq; (A.nextseq < A.buffer_index) && (A.nextseq < A.base + A.window); A.nextseq++) {
         //If starttimer is called when a timer is already activated, a warning is given but the current timer is kept
         struct pkt *pack = &A.buffer[A.nextseq%50];
         tolayer3(0,*pack);
@@ -165,31 +148,6 @@ void B_input(packet) struct pkt packet;
         // Send lst in order packet if something went wrong. The new packet is dropped
         tolayer3(1, B.last_in_order_pkt);
     }
-    // if(ACK_FLAG) {
-    //
-    //     if (checksum_check(&packet,packet.checksum) == 0) {
-    //         printf("A_input: Corrupted Packet.\n");
-    //         return;
-    //     }
-    //     if (packet.acknum < B.base) return; //Nak
-
-    //     // Recieve ACK and check sequence number
-    //     B.base = packet.acknum + 1;
-    //     if(B.base == B.nextseq) {
-    //         stoptimer(1);
-
-    //         //calculate new send window
-
-    //         for (B.nextseq; (B.nextseq < B.buffer_index) && (B.nextseq < B.base + B.window_size); B.nextseq++){
-    //             struct pkt *pack = &B.buffer[B.nextseq];
-    //             tolayer3(1,*pack);
-    //             if (B.base == B.nextseq) starttimer(1, B.est_rtt);
-    //         }
-    //     } else {
-    //         // Start timer
-    //         starttimer(1,B.est_rtt);
-    //     }
-    // }
 }
 
 
@@ -199,30 +157,6 @@ void A_input(struct pkt packet) {
     a packet sent from the B-side (i.e., as a result of a tolayer3() being done by a B-side procedure)
     arrives at the A-side. packet is the (possibly corrupted) packet sent from the B-side. */
     printf("\nA_INPUT\n");
-
-    // if (!ACK_FLAG) {
-    //     // If checksum is OK then send to layer 5 and send ACK
-    //     if ((A.expectseq == packet.seqnum) && (checksum_check(&packet,packet.checksum)==1)){
-    //         printf("\n--------------DELIVER-A-------------\n");
-    //         tolayer5(0, packet.payload);
-    //         A.last_in_order_pkt.acknum = A.expectseq;
-    //         A.last_in_order_pkt.checksum = create_checksum(&A.last_in_order_pkt,A.last_in_order_pkt.payload);
-    //         tolayer3(0, A.last_in_order_pkt);
-    //         ++A.expectseq;
-    //         return;
-    //     } else {
-    //         printf("\nChecksum mismatch or sequence number out of order\n");
-
-    //         if (packet.checksum != create_checksum(&packet,packet.payload)) {
-    //             printf("Checksum is %d, and should be %d.\n", packet.checksum,create_checksum(&packet,packet.payload));
-    //         }
-    //         if (packet.seqnum != A.expectseq) {
-    //             printf("Seqnum is %d, and should be %d.\n", packet.seqnum, A.expectseq);
-    //         }
-    //         // Send lst in order packet if something went wrong. The new packet is dropped
-    //         tolayer3(0, A.last_in_order_pkt);
-    //     }
-    // }
 
     if (checksum_check(&packet,packet.checksum) == 0) {
         printf("A_input: Corrupted Packet.\n");
@@ -237,7 +171,7 @@ void A_input(struct pkt packet) {
 
         //calculate new send window
 
-        for (A.nextseq; (A.nextseq < A.buffer_index) && (A.nextseq < A.base + A.window_size); A.nextseq++){
+        for (A.nextseq; (A.nextseq < A.buffer_index) && (A.nextseq < A.base + A.window); A.nextseq++){
             struct pkt *pack = &A.buffer[A.nextseq];
             tolayer3(0,*pack);
             if (A.base == A.nextseq) starttimer(0, A.est_rtt);
@@ -285,7 +219,7 @@ void B_output(message) struct msg message;{
     B.buffer[B.buffer_index] = my_pkt;
     B.buffer_index += 1;
 
-    for(B.nextseq; (B.nextseq < B.buffer_index) && (B.nextseq < B.base + B.window_size); B.nextseq++) {
+    for(B.nextseq; (B.nextseq < B.buffer_index) && (B.nextseq < B.base + B.window); B.nextseq++) {
         //If starttimer is called when a timer is already activated, a warning is given but the current timer is kept
         struct pkt *pack = &B.buffer[B.nextseq%50];
         tolayer3(1,*pack);
