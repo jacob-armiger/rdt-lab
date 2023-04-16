@@ -446,12 +446,12 @@ init() /* initialize the simulator */
 
     printf("Enter packet loss probability [enter 0.0 for no loss]:");
     // scanf("%f", &lossprob);
-    lossprob = 0.6; //0.6
+    lossprob = 0.6;
     printf("%f\n", lossprob);
 
     printf("Enter packet corruption probability [0.0 for no corruption]:");
     // scanf("%f", &corruptprob);
-    corruptprob = 0.5; //0.5
+    corruptprob = 0.5;
     printf("%f\n", corruptprob);
 
     printf("Enter average time between messages from sender's layer5 [ > 0.0]:");
