@@ -147,7 +147,7 @@ void B_input(packet) struct pkt packet;
 
     // If checksum is OK then send to layer 5 and send ACK
     if ((B.expectseq == packet.seqnum) && (checksum_check(&packet,packet.checksum)==1)){
-        printf("\n--------------DELIVER--------------\n");
+        printf("\n------------ DELIVER %c's ------------\n", packet.payload[0]);
         tolayer5(1, packet.payload);
         B.last_in_order_pkt.acknum = B.expectseq;
         B.last_in_order_pkt.checksum = create_checksum(&B.last_in_order_pkt,B.last_in_order_pkt.payload);
@@ -522,7 +522,7 @@ init() /* initialize the simulator */
 
     printf("Enter average time between messages from sender's layer5 [ > 0.0]:");
     // scanf("%f", &lambda);
-    lambda = 7.0;
+    lambda = 13.0;
     printf("%f\n", lambda);
 
     printf("Enter TRACE:");
